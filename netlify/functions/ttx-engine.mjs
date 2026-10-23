@@ -137,7 +137,8 @@ Return ONLY a valid JSON object matching this exact schema:
 }`;
     }
 
-    const endpoint = `${baseUrl}/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+   // Automatically tries gemini-3.0-flash first, with fallback to gemini-flash-latest
+const modelsToTry = ["gemini-3.0-flash", "gemini-flash-latest", "gemini-2.5-pro"];
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
