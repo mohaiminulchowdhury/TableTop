@@ -9,7 +9,6 @@ export default async (req) => {
     const body = await req.json();
     const { mode, config, turn, totalTurns, metrics, history, clientApiKey } = body;
 
-    // Priority: 1. Client-supplied session key -> 2. Netlify Environment Variable GEMINI_API_KEY
     const apiKey = (clientApiKey && clientApiKey.trim()) || process.env.GEMINI_API_KEY;
     const baseUrl = process.env.GOOGLE_GEMINI_BASE_URL || "https://generativelanguage.googleapis.com";
 
@@ -64,10 +63,10 @@ Always respond with STRICT, valid JSON only. Never wrap JSON in markdown fences.
 ${historySummary}
 
 ### INSTRUCTIONS FOR INJECT #${turn} OF ${totalTurns}:
-1. Make this inject a direct, logical continuation of the participant's previous choice. Progress the attack lifecycle realistically across the ${totalTurns} turns (e.g., Turn 1: Initial Access/Identity -> Middle Turns: Lateral Movement, Privilege Escalation, Staging/Exfiltration, Backup Sabotage -> Final Turns: Extortion Demand, Regulatory Notification Clock, Clean-Room Recovery).
+1. Make this inject a direct, logical continuation of the participant's previous choice. Progress the attack lifecycle realistically across the ${totalTurns} turns.
 2. Write an authentic, non-generic "telemetryArtifact" matching ${config.stack} (e.g., if Microsoft Sentinel/Defender/Entra ID is selected, write a realistic multi-line KQL query with realistic output rows, IP addresses, process command lines, or Entra sign-in properties).
 3. Write a realistic "commsArtifact" showing urgent internal Slack/Teams messages from SOC leads, General Counsel, CEO, or Threat Actor Tor negotiation chat.
-4. Provide EXACTLY 4 strategic decision options. DO NOT make 1 obvious good option and 3 stupid options. Every option must be a realistic operational trade-off (e.g., aggressive isolation boosts containment but hurts uptime; silent monitoring preserves uptime but risks exfiltration; premature disclosure hurts trust; delaying notification violates ${config.regulation}).
+4. Provide EXACTLY 4 strategic decision options. Every option must be a realistic operational trade-off.
 
 Return ONLY a valid JSON object matching this exact schema:
 {
@@ -127,49 +126,57 @@ Return ONLY a valid JSON object matching this exact schema:
     "respond": 80,
     "recover": 75
   },
-  "strengths": ["String (Specific strength based on their actual choices)", "String", "String"],
-  "blindSpots": ["String (Specific gap or trade-off vulnerability exposed by their choices)", "String", "String"],
+  "strengths": ["String", "String", "String"],
+  "blindSpots": ["String", "String", "String"],
   "roadmap": {
-    "days30": ["String (Concrete technical/SOAR action for ${config.stack})", "String", "String"],
-    "days60": ["String (Concrete architecture/identity/segmentation action)", "String", "String"],
-    "days90": ["String (Concrete governance/${config.regulation} compliance action)", "String", "String"]
+    "days30": ["String", "String", "String"],
+    "days60": ["String", "String", "String"],
+    "days90": ["String", "String", "String"]
   }
 }`;
     }
 
-   // Automatically tries gemini-3.0-flash first, with fallback to gemini-flash-latest
-const modelsToTry = ["gemini-3.0-flash", "gemini-flash-latest", "gemini-2.5-pro"];
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature: 0.7,
-          responseMimeType: "application/json"
-        }
-      })
-    });
+    const candidateModels = [
+      "gemini-3.0-flash",
+      "gemini-3-flash-preview",
+      "gemini-flash-latest"
+    ];
 
-    const rawData = await response.json();
-    if (!response.ok) {
-      return new Response(
-        JSON.stringify({
-          error: rawData?.error?.message || `API Error (${response.status})`,
-          details: rawData
-        }),
-        { status: response.status, headers: { "Content-Type": "application/json" } }
-      );
+    let lastError = null;
+
+    for (const modelName of candidateModels) {
+      const endpoint = `${baseUrl}/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            responseMimeType: "application/json"
+          }
+        })
+      });
+
+      const rawData = await response.json();
+
+      if (response.ok) {
+        const textOutput = rawData?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        const cleanedJson = JSON.parse(textOutput.replace(/```json|```/g, "").trim());
+        return new Response(JSON.stringify(cleanedJson), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      lastError = rawData?.error?.message || `API Error (${response.status}) on ${modelName}`;
     }
 
-    const textOutput = rawData?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    const cleanedJson = JSON.parse(textOutput.replace(/```json|```/g, "").trim());
-
-    return new Response(JSON.stringify(cleanedJson), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
+    return new Response(
+      JSON.stringify({ error: lastError }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
   } catch (err) {
     return new Response(
       JSON.stringify({ error: err.message || "Internal Function Error" }),
