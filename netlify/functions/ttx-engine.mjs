@@ -1,6 +1,11 @@
 export default async (req) => {
+  const jsonHeaders = { "Content-Type": "application/json" };
+
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: jsonHeaders
+    });
   }
 
   try {
@@ -15,7 +20,14 @@ export default async (req) => {
         JSON.stringify({
           error: "Missing API Key. Set GEMINI_API_KEY in Netlify Environment Variables or paste your key in the UI settings."
         }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
+      );
+    }
+
+    if (!config || !metrics) {
+      return new Response(
+        JSON.stringify({ error: "Bad request: 'config' and 'metrics' are required." }),
+        { status: 400, headers: jsonHeaders }
       );
     }
 
@@ -29,10 +41,10 @@ Always respond with STRICT, valid JSON only. Never wrap JSON in markdown fences.
       const historySummary =
         history && history.length > 0
           ? history
-              .map(
-                (h, i) =>
-                  `Turn ${i + 1} (${h.phase}): Incident was "${h.title}". Participant chose Option "${h.selectedOption.label}" (${h.selectedOption.desc}). Consequence was: "${h.selectedOption.outcome}".`
-              )
+              .map((h, i) => {
+                const o = h.selectedOption || {};
+                return `Turn ${i + 1} (${h.phase}): Incident was "${h.title}". Participant chose Option "${o.label}" (${o.desc}). Consequence was: "${o.outcome}".`;
+              })
               .join("\n")
           : "This is Turn 1 (Initial Detection). No prior actions taken yet.";
 
@@ -62,9 +74,10 @@ ${historySummary}
 
 ### INSTRUCTIONS FOR INJECT #${turn} OF ${totalTurns}:
 1. Make this inject a direct, logical continuation of the participant's previous choice. Progress the attack lifecycle realistically across the ${totalTurns} turns.
-2. Write an authentic, non-generic "telemetryArtifact" matching ${config.stack}.
-3. Write a realistic "commsArtifact" showing urgent internal war-room messages.
+2. Write an authentic, non-generic "telemetryArtifact" matching ${config.stack}. Keep it to 6-8 lines.
+3. Write a realistic "commsArtifact" showing urgent internal war-room messages. Keep it to 5-7 lines.
 4. Provide EXACTLY 4 strategic decision options with realistic operational trade-offs.
+5. Keep the narrative to 2 short paragraphs and keep every option description concise.
 
 Return ONLY a valid JSON object matching this exact schema:
 {
@@ -120,37 +133,78 @@ Return ONLY a valid JSON object matching this exact schema:
     "days90": ["String", "String", "String"]
   }
 }`;
+    } else {
+      return new Response(
+        JSON.stringify({ error: `Unknown mode: ${mode}` }),
+        { status: 400, headers: jsonHeaders }
+      );
     }
 
-    const candidateModels = ["gemini-3.0-flash", "gemini-3-flash-preview", "gemini-flash-latest"];
-    let lastError = null;
+    const candidateModels = ["gemini-flash-latest", "gemini-3-flash-preview", "gemini-2.5-flash"];
+    const errors = [];
 
     for (const modelName of candidateModels) {
-      const endpoint = `${baseUrl}/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: { temperature: 0.7, responseMimeType: "application/json" }
-        })
-      });
-
-      const rawData = await response.json();
-      if (response.ok) {
-        const textOutput = rawData?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-        const cleanedJson = JSON.parse(textOutput.replace(/```json|```/g, "").trim());
-        return new Response(JSON.stringify(cleanedJson), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
+      try {
+        const endpoint = `${baseUrl}/v1beta/models/${modelName}:generateContent`;
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey
+          },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+            generationConfig: {
+              temperature: 0.7,
+              responseMimeType: "application/json",
+              maxOutputTokens: 8192
+            }
+          })
         });
+
+        const raw = await response.text();
+        let data = null;
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          data = null;
+        }
+
+        if (!response.ok) {
+          errors.push(`${modelName} [${response.status}]: ${data?.error?.message || raw.slice(0, 200)}`);
+          continue;
+        }
+
+        const text = (data?.candidates?.[0]?.content?.parts || [])
+          .map((p) => p.text || "")
+          .join("");
+
+        if (!text) {
+          const reason = data?.candidates?.[0]?.finishReason || data?.promptFeedback?.blockReason || "empty response";
+          errors.push(`${modelName}: no content (${reason})`);
+          continue;
+        }
+
+        const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+
+        return new Response(JSON.stringify(parsed), {
+          status: 200,
+          headers: jsonHeaders
+        });
+      } catch (e) {
+        errors.push(`${modelName}: ${e.message}`);
       }
-      lastError = rawData?.error?.message || `API Error (${response.status}) on ${modelName}`;
     }
 
-    return new Response(JSON.stringify({ error: lastError }), { status: 400, headers: { "Content-Type": "application/json" } });
+    return new Response(
+      JSON.stringify({ error: errors.join(" | ") || "All models failed." }),
+      { status: 502, headers: jsonHeaders }
+    );
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message || "Internal Function Error" }), { status: 500, headers: { "Content-Type": "application/json" } });
+    return new Response(
+      JSON.stringify({ error: err.message || "Internal Function Error" }),
+      { status: 500, headers: jsonHeaders }
+    );
   }
 };
