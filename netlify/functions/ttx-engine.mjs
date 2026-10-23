@@ -1,5 +1,3 @@
-// File path in GitHub repo: netlify/functions/ttx-engine.mjs
-
 export default async (req) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
@@ -45,13 +43,13 @@ Always respond with STRICT, valid JSON only. Never wrap JSON in markdown fences.
 - Industry Vertical: ${config.industry}
 - Infrastructure Footprint: ${config.infra}
 - Crown Jewels at Risk: ${config.crownJewels}
-- Security Stack (Use exact syntax for logs!): ${config.stack}
+- Security Stack: ${config.stack}
 - Threat Actor Profile: ${config.threatActor}
 - Initial Access Vector: ${config.initialVector}
 - Regulatory Framework: ${config.regulation}
 - Participant Role Lens: ${config.role}
 - Pressure / Difficulty Level: ${config.difficulty}
-- Special Scenario Focus / Custom Notes: ${config.customNotes || "Standard full kill-chain progression"}
+- Special Scenario Focus: ${config.customNotes || "Standard full kill-chain progression"}
 
 ### CURRENT LIVE METRICS (0-100):
 - Technical Containment: ${metrics.containment}%
@@ -59,47 +57,42 @@ Always respond with STRICT, valid JSON only. Never wrap JSON in markdown fences.
 - Regulatory Compliance (${config.regulation}): ${metrics.compliance}%
 - Board & Public Trust: ${metrics.trust}%
 
-### PREVIOUS DECISIONS IN THIS EXERCISE (MUST DIRECTLY SHAPE THIS INJECT!):
+### PREVIOUS DECISIONS:
 ${historySummary}
 
 ### INSTRUCTIONS FOR INJECT #${turn} OF ${totalTurns}:
 1. Make this inject a direct, logical continuation of the participant's previous choice. Progress the attack lifecycle realistically across the ${totalTurns} turns.
-2. Write an authentic, non-generic "telemetryArtifact" matching ${config.stack} (e.g., if Microsoft Sentinel/Defender/Entra ID is selected, write a realistic multi-line KQL query with realistic output rows, IP addresses, process command lines, or Entra sign-in properties).
-3. Write a realistic "commsArtifact" showing urgent internal Slack/Teams messages from SOC leads, General Counsel, CEO, or Threat Actor Tor negotiation chat.
-4. Provide EXACTLY 4 strategic decision options. Every option must be a realistic operational trade-off.
+2. Write an authentic, non-generic "telemetryArtifact" matching ${config.stack}.
+3. Write a realistic "commsArtifact" showing urgent internal war-room messages.
+4. Provide EXACTLY 4 strategic decision options with realistic operational trade-offs.
 
 Return ONLY a valid JSON object matching this exact schema:
 {
-  "phase": "String (e.g., Lateral Movement & Credential Harvesting)",
-  "mitre": "String (e.g., T1021.002 - SMB/Windows Admin Shares / T1003 - OS Credential Dumping)",
-  "nist": "String (e.g., DETECT [DE.CM] & RESPOND [RS.MI])",
+  "phase": "String",
+  "mitre": "String",
+  "nist": "String",
   "timeJumpMinutes": 45,
   "severity": "CRITICAL | HIGH | ELEVATED",
-  "title": "String (Headline of this inject)",
-  "narrative": "String (2-3 rich paragraphs describing the exact situation unfolding right now based on their last decision)",
-  "telemetryArtifact": "String (8-14 lines of realistic KQL / SPL / UDM query + alert output)",
-  "commsArtifact": "String (Realistic timestamped war-room messages from executives, legal, or threat actor)",
-  "dilemmaSummary": "String (1 sentence summarizing the core tension the participant must resolve right now)",
+  "title": "String",
+  "narrative": "String",
+  "telemetryArtifact": "String",
+  "commsArtifact": "String",
+  "dilemmaSummary": "String",
   "options": [
     {
       "id": "A",
-      "label": "String (Action title, 6-12 words)",
-      "tacticTag": "String (e.g., Aggressive Containment | Forensic Preservation | Business Continuity | Regulatory Shield)",
-      "desc": "String (Detailed explanation of the action and trade-off)",
-      "impact": {
-        "containment": 20,
-        "uptime": -15,
-        "compliance": 10,
-        "trust": 5
-      },
+      "label": "String",
+      "tacticTag": "String",
+      "desc": "String",
+      "impact": { "containment": 20, "uptime": -15, "compliance": 10, "trust": 5 },
       "estimatedCostDeltaUSD": 45000,
-      "outcome": "String (What immediately happens when they execute this choice and how the threat actor reacts)",
-      "critique": "String (Senior Cybersecurity Consultant critique referencing NIST CSF 2.0, MITRE, or ${config.regulation})"
+      "outcome": "String",
+      "critique": "String"
     }
   ]
 }`;
     } else if (mode === "generate_aar") {
-      userPrompt = `Generate a comprehensive, Big-4 Consultant-Grade Executive After-Action Report (AAR) for ${config.orgName} (${config.industry}) following their ${totalTurns}-inject tabletop exercise.
+      userPrompt = `Generate a comprehensive Executive After-Action Report (AAR) for ${config.orgName} (${config.industry}) following their ${totalTurns}-inject tabletop exercise.
 
 ### EXERCISE CONTEXT:
 - Stack: ${config.stack}
@@ -108,24 +101,17 @@ Return ONLY a valid JSON object matching this exact schema:
 - Regulation: ${config.regulation}
 - Final Metrics: Containment ${metrics.containment}%, Uptime ${metrics.uptime}%, Compliance ${metrics.compliance}%, Trust ${metrics.trust}%
 
-### COMPLETE CHRONOLOGICAL DECISION LOG:
+### COMPLETE DECISION LOG:
 ${JSON.stringify(history, null, 2)}
 
 Return ONLY a valid JSON object matching this exact schema:
 {
-  "executiveSummary": "String (2-3 authoritative paragraphs analyzing the team's end-to-end handling of the crisis, trade-offs made, and whether ${config.crownJewels} and ${config.regulation} obligations were safeguarded)",
+  "executiveSummary": "String",
   "crownJewelsVerdict": "PROTECTED | PARTIALLY EXPOSED | COMPROMISED",
   "regulatoryVerdict": "COMPLIANT & DEFENSIBLE | AUDIT EXPOSURE | STATUTORY VIOLATION RISK",
-  "simulatedMTTD": "String (e.g., 16 Minutes)",
-  "simulatedMTTR": "String (e.g., 4.2 Hours)",
-  "nistScores": {
-    "govern": 80,
-    "identify": 75,
-    "protect": 70,
-    "detect": 85,
-    "respond": 80,
-    "recover": 75
-  },
+  "simulatedMTTD": "String",
+  "simulatedMTTR": "String",
+  "nistScores": { "govern": 80, "identify": 75, "protect": 70, "detect": 85, "respond": 80, "recover": 75 },
   "strengths": ["String", "String", "String"],
   "blindSpots": ["String", "String", "String"],
   "roadmap": {
@@ -136,12 +122,7 @@ Return ONLY a valid JSON object matching this exact schema:
 }`;
     }
 
-    const candidateModels = [
-      "gemini-3.0-flash",
-      "gemini-3-flash-preview",
-      "gemini-flash-latest"
-    ];
-
+    const candidateModels = ["gemini-3.0-flash", "gemini-3-flash-preview", "gemini-flash-latest"];
     let lastError = null;
 
     for (const modelName of candidateModels) {
@@ -152,15 +133,11 @@ Return ONLY a valid JSON object matching this exact schema:
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            responseMimeType: "application/json"
-          }
+          generationConfig: { temperature: 0.7, responseMimeType: "application/json" }
         })
       });
 
       const rawData = await response.json();
-
       if (response.ok) {
         const textOutput = rawData?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
         const cleanedJson = JSON.parse(textOutput.replace(/```json|```/g, "").trim());
@@ -169,18 +146,11 @@ Return ONLY a valid JSON object matching this exact schema:
           headers: { "Content-Type": "application/json" }
         });
       }
-
       lastError = rawData?.error?.message || `API Error (${response.status}) on ${modelName}`;
     }
 
-    return new Response(
-      JSON.stringify({ error: lastError }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: lastError }), { status: 400, headers: { "Content-Type": "application/json" } });
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: err.message || "Internal Function Error" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: err.message || "Internal Function Error" }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 };
